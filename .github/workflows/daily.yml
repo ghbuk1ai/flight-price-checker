@@ -2,12 +2,13 @@ name: Daily flight check
 
 on:
   schedule:
-    - cron: "0 13 * * *"  # 13:00 UTC ≈ 7am Chicago (CST). Adjust if you want.
+    - cron: "0 13 * * *"   # 13:00 UTC ≈ 7am Chicago (CST). Adjust if desired.
   workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -22,21 +23,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Run agent
-      - name: Run agent
+      - name: Run flight agent
         env:
           DUFFEL_TOKEN: ${{ secrets.DUFFEL_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
+          # Reusable settings (edit these anytime)
           ORIGIN: ORD
           DEST: LHR
           OUTBOUND_CABIN: business
           RETURN_CABIN: premium_economy
-          THRESHOLD: "3000"
+
+          CURRENCY: USD
+          THRESHOLD: "2500"
+
           START_DAYS_OUT: "14"
           END_DAYS_OUT: "28"
           MIN_TRIP_DAYS: "3"
           MAX_TRIP_DAYS: "14"
+
           PREFER_NONSTOP: "true"
           MAX_STOPS_PREFERRED: "0"
           MAX_STOPS_FALLBACK: "1"
