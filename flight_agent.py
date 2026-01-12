@@ -11,7 +11,7 @@ SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 
 # Your requirements
 ORIGIN = "ORD"
-DEST = "LON"          # change to "LHR" if you only want Heathrow
+DEST = "LHR"          # change to "LHR" if you only want Heathrow
 CURRENCY = "USD"
 THRESHOLD = 3500.00
 
