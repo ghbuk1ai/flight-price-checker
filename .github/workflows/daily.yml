@@ -35,7 +35,7 @@ jobs:
           RETURN_CABIN: premium_economy
 
           CURRENCY: USD
-          THRESHOLD: "2500"
+          THRESHOLD: "3000"
 
           START_DAYS_OUT: "14"
           END_DAYS_OUT: "28"
