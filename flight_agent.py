@@ -103,7 +103,6 @@ def cheapest_offer(offers: list) -> dict | None:
             best = {"amount": amt, "offer_id": o["id"], "offer": o}
     return best
 
-
 def main() -> None:
     today = date.today()
     start = today + timedelta(days=START_DAYS_OUT)
@@ -146,6 +145,8 @@ def main() -> None:
                     "ret_offer_id": ret_best["offer_id"],
                     "out_offer": out_best["offer"],
                     "ret_offer": ret_best["offer"],
+                    "out_stops": out_best.get("stops"),
+                    "ret_stops": ret_best.get("stops"),
                 }
                 results.append(row)
                 if total < THRESHOLD:
@@ -161,43 +162,42 @@ def main() -> None:
     for r in results[:5]:
         print(
             f'{r["out_date"]} → {r["ret_date"]} | '
-            f'Out ${r["out_usd"]:.2f} + Back ${r["ret_usd"]:.2f} = ${r["total_usd"]:.2f}'
+            f'Out ${r["out_usd"]:.2f} + Back ${r["ret_usd"]:.2f} = ${r["total_usd"]:.2f} | '
+            f'Out stops: {r["out_stops"]}, Back stops: {r["ret_stops"]}'
         )
 
-if alerts:
-    alerts.sort(key=lambda x: x["total_usd"])
-    best = alerts[0]
+    if alerts:
+        alerts.sort(key=lambda x: x["total_usd"])
+        best = alerts[0]
 
-    out_summary = _extract_offer_summary(best["out_offer"])
-    ret_summary = _extract_offer_summary(best["ret_offer"])
+        out_summary = _extract_offer_summary(best["out_offer"])
+        ret_summary = _extract_offer_summary(best["ret_offer"])
 
-    out_text = _format_leg_for_slack(
-        title="Outbound",
-        price=best["out_usd"],
-        summary=out_summary,
-        cabin_label="Business"
-    )
+        out_text = _format_leg_for_slack(
+            title="Outbound",
+            price=best["out_usd"],
+            summary=out_summary,
+            cabin_label="Business",
+        )
 
-    ret_text = _format_leg_for_slack(
-        title="Return",
-        price=best["ret_usd"],
-        summary=ret_summary,
-        cabin_label="Premium Economy"
-    )
+        ret_text = _format_leg_for_slack(
+            title="Return",
+            price=best["ret_usd"],
+            summary=ret_summary,
+            cabin_label="Premium Economy",
+        )
 
-    msg = (
-        f"✈️ *Deal found under ${THRESHOLD:.0f}* — *${best['total_usd']:.2f} total*\n"
-        f"Dates: {best['out_date']} → {best['ret_date']}\n\n"
-        f"{out_text}\n\n"
-        f"{ret_text}\n\n"
-        f"Offer IDs: out `{best['out_offer_id']}` / back `{best['ret_offer_id']}`"
-    )
+        msg = (
+            f"✈️ *Deal found under ${THRESHOLD:.0f}* — *${best['total_usd']:.2f} total*\n"
+            f"Dates: {best['out_date']} → {best['ret_date']}\n\n"
+            f"{out_text}\n\n"
+            f"{ret_text}\n\n"
+            f"Offer IDs: out `{best['out_offer_id']}` / back `{best['ret_offer_id']}`"
+        )
 
-    print(msg)
-    notify_slack(msg)
+        print(msg)
+        notify_slack(msg)
 
-
-    # Optional: write a file so you can inspect it later
     with open("latest_results.json", "w", encoding="utf-8") as f:
         json.dump({"generated": today.isoformat(), "top5": results[:5], "alerts": alerts}, f, indent=2)
 
