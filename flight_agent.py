@@ -13,7 +13,7 @@ SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 ORIGIN = "ORD"
 DEST = "LON"          # change to "LHR" if you only want Heathrow
 CURRENCY = "USD"
-THRESHOLD = 2500.00
+THRESHOLD = 3500.00
 
 # Window: 2–4 weeks out
 START_DAYS_OUT = 14
