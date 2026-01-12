@@ -25,7 +25,7 @@ MAX_TRIP_DAYS = 14
 
 HEADERS = {
     "Authorization": f"Bearer {DUFFEL_TOKEN}",
-    "Duffel-Version": "beta",
+    "Duffel-Version": "v2",
     "Content-Type": "application/json",
 }
 
