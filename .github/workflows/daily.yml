@@ -23,8 +23,25 @@ jobs:
           pip install requests
 
       - name: Run agent
+      - name: Run agent
         env:
           DUFFEL_TOKEN: ${{ secrets.DUFFEL_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+          ORIGIN: ORD
+          DEST: LHR
+          OUTBOUND_CABIN: business
+          RETURN_CABIN: premium_economy
+          THRESHOLD: "3000"
+          START_DAYS_OUT: "14"
+          END_DAYS_OUT: "28"
+          MIN_TRIP_DAYS: "3"
+          MAX_TRIP_DAYS: "14"
+          PREFER_NONSTOP: "true"
+          MAX_STOPS_PREFERRED: "0"
+          MAX_STOPS_FALLBACK: "1"
+        run: |
+          python flight_agent.py
+
         run: |
           python flight_agent.py
