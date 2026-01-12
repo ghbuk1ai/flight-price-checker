@@ -84,6 +84,26 @@ def notify_slack(text: str) -> None:
         return
     requests.post(SLACK_WEBHOOK_URL, json={"text": text}, timeout=15).raise_for_status()
 
+def cheapest_offer(offers: list) -> dict | None:
+    """
+    Picks the cheapest offer in USD.
+    Returns:
+      {
+        "amount": float,
+        "offer_id": str,
+        "offer": dict   # full offer payload
+      }
+    """
+    best = None
+    for o in offers:
+        if o.get("total_currency") != CURRENCY:
+            continue
+        amt = float(o["total_amount"])
+        if best is None or amt < best["amount"]:
+            best = {"amount": amt, "offer_id": o["id"], "offer": o}
+    return best
+
+
 def main() -> None:
     today = date.today()
     start = today + timedelta(days=START_DAYS_OUT)
@@ -124,6 +144,8 @@ def main() -> None:
                     "total_usd": round(total, 2),
                     "out_offer_id": out_best["offer_id"],
                     "ret_offer_id": ret_best["offer_id"],
+                    "out_offer": out_best["offer"],
+                    "ret_offer": ret_best["offer"],
                 }
                 results.append(row)
                 if total < THRESHOLD:
@@ -142,18 +164,38 @@ def main() -> None:
             f'Out ${r["out_usd"]:.2f} + Back ${r["ret_usd"]:.2f} = ${r["total_usd"]:.2f}'
         )
 
-    if alerts:
-        alerts.sort(key=lambda x: x["total_usd"])
-        best = alerts[0]
-        msg = (
-            f"Deal found under ${THRESHOLD:.0f}!\n"
-            f"ORD→{DEST} (Business) {best['out_date']}: ${best['out_usd']:.2f}\n"
-            f"{DEST}→ORD (Prem Econ) {best['ret_date']}: ${best['ret_usd']:.2f}\n"
-            f"Total: ${best['total_usd']:.2f}\n"
-            f"Offer IDs: out {best['out_offer_id']} / back {best['ret_offer_id']}"
-        )
-        print(msg)
-        notify_slack(msg)
+if alerts:
+    alerts.sort(key=lambda x: x["total_usd"])
+    best = alerts[0]
+
+    out_summary = _extract_offer_summary(best["out_offer"])
+    ret_summary = _extract_offer_summary(best["ret_offer"])
+
+    out_text = _format_leg_for_slack(
+        title="Outbound",
+        price=best["out_usd"],
+        summary=out_summary,
+        cabin_label="Business"
+    )
+
+    ret_text = _format_leg_for_slack(
+        title="Return",
+        price=best["ret_usd"],
+        summary=ret_summary,
+        cabin_label="Premium Economy"
+    )
+
+    msg = (
+        f"✈️ *Deal found under ${THRESHOLD:.0f}* — *${best['total_usd']:.2f} total*\n"
+        f"Dates: {best['out_date']} → {best['ret_date']}\n\n"
+        f"{out_text}\n\n"
+        f"{ret_text}\n\n"
+        f"Offer IDs: out `{best['out_offer_id']}` / back `{best['ret_offer_id']}`"
+    )
+
+    print(msg)
+    notify_slack(msg)
+
 
     # Optional: write a file so you can inspect it later
     with open("latest_results.json", "w", encoding="utf-8") as f:
