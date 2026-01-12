@@ -46,7 +46,6 @@ def create_offer_request(origin: str, destination: str, depart_date: date, cabin
             ],
             "passengers": [{"type": "adult"}],
             "cabin_class": cabin_class,
-            "return_offers": True,
         }
     }
     r = requests.post(url, headers=HEADERS, json=payload, timeout=30)
@@ -54,8 +53,9 @@ def create_offer_request(origin: str, destination: str, depart_date: date, cabin
 if not r.ok:
     print("Duffel error status:", r.status_code)
     print("Duffel error body:", r.text)
-    r.raise_for_status()
-    return r.json()["data"]["id"]
+    
+r.raise_for_status()
+return r.json()["data"]["id"]
 
 def list_offers(offer_request_id: str, limit: int = 30) -> list:
     """Lists offers for a given offer request."""
