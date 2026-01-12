@@ -17,7 +17,7 @@ ORIGIN = "ORD"
 DEST = "LHR"  # Heathrow. Change if you want another London airport.
 
 CURRENCY = "USD"
-THRESHOLD = 2500.00
+THRESHOLD = 3000.00
 
 # Window: 2–4 weeks out
 START_DAYS_OUT = 14
