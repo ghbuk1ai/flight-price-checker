@@ -13,25 +13,44 @@ SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")  # optional
 # =========================
 # YOUR SETTINGS
 # =========================
-ORIGIN = "ORD"
-DEST = "LHR"  # Heathrow. Change if you want another London airport.
+def _env(name: str, default: str | None = None) -> str:
+    v = os.environ.get(name, default)
+    if v is None or v == "":
+        raise ValueError(f"Missing required environment variable: {name}")
+    return v
 
-CURRENCY = "USD"
-THRESHOLD = 3000.00
+def _env_float(name: str, default: float) -> float:
+    v = os.environ.get(name)
+    return float(v) if v not in (None, "") else default
 
-# Window: 2–4 weeks out
-START_DAYS_OUT = 14
-END_DAYS_OUT = 28
+def _env_int(name: str, default: int) -> int:
+    v = os.environ.get(name)
+    return int(v) if v not in (None, "") else default
 
-# Trip length (adjust as you want)
-MIN_TRIP_DAYS = 3
-MAX_TRIP_DAYS = 14
+def _env_bool(name: str, default: bool) -> bool:
+    v = os.environ.get(name)
+    if v in (None, ""):
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
-# Stops preference:
-# Prefer nonstop, but if none exist for a date, allow 1-stop as fallback.
-PREFER_NONSTOP = True
-MAX_STOPS_PREFERRED = 0   # 0 = nonstop
-MAX_STOPS_FALLBACK = 1    # allow up to 1 stop if no nonstop
+# ===== Reusable settings (with defaults) =====
+ORIGIN = _env("ORIGIN", "ORD")
+DEST = _env("DEST", "LHR")
+OUTBOUND_CABIN = _env("OUTBOUND_CABIN", "business")
+RETURN_CABIN = _env("RETURN_CABIN", "premium_economy")
+
+CURRENCY = _env("CURRENCY", "USD")
+THRESHOLD = _env_float("THRESHOLD", 2500.0)
+
+START_DAYS_OUT = _env_int("START_DAYS_OUT", 14)
+END_DAYS_OUT = _env_int("END_DAYS_OUT", 28)
+
+MIN_TRIP_DAYS = _env_int("MIN_TRIP_DAYS", 3)
+MAX_TRIP_DAYS = _env_int("MAX_TRIP_DAYS", 14)
+
+PREFER_NONSTOP = _env_bool("PREFER_NONSTOP", True)
+MAX_STOPS_PREFERRED = _env_int("MAX_STOPS_PREFERRED", 0)
+MAX_STOPS_FALLBACK = _env_int("MAX_STOPS_FALLBACK", 1)
 
 HEADERS = {
     "Authorization": f"Bearer {DUFFEL_TOKEN}",
@@ -270,8 +289,8 @@ def main() -> None:
 
         ret_date = ret_min
         while ret_date <= ret_max:
-            out_best = best_one_way(ORIGIN, DEST, out_date, "business")
-            ret_best = best_one_way(DEST, ORIGIN, ret_date, "premium_economy")
+            out_best = best_one_way(ORIGIN, DEST, out_date, OUTBOUND_CABIN)
+            ret_best = best_one_way(DEST, ORIGIN, ret_date, RETURN_CABIN)
 
             if out_best and ret_best:
                 total = out_best["amount"] + ret_best["amount"]
@@ -317,13 +336,13 @@ def main() -> None:
             title="Outbound",
             price=best["out_usd"],
             summary=out_summary,
-            cabin_label="Business",
+            cabin_label=OUTBOUND_CABIN.replace("_", " ").title(),
         )
         ret_text = _format_leg_for_slack(
             title="Return",
             price=best["ret_usd"],
             summary=ret_summary,
-            cabin_label="Premium Economy",
+            cabin_label=RETURN_CABIN.replace("_", " ").title(),
         )
 
         msg = (
