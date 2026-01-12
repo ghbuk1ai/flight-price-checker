@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from datetime import date, timedelta
+import re
 
 # =========================
 # REQUIRED / OPTIONAL SECRETS
@@ -67,6 +68,19 @@ def create_offer_request(origin: str, destination: str, depart_date: date, cabin
     r.raise_for_status()
     return r.json()["data"]["id"]
 
+def _human_duration(iso_duration: str) -> str:
+    # Converts "PT9H2M" -> "9h 2m", "PT7H" -> "7h", "PT45M" -> "45m"
+    if not iso_duration or not iso_duration.startswith("PT"):
+        return iso_duration or "N/A"
+    h = re.search(r"(\d+)H", iso_duration)
+    m = re.search(r"(\d+)M", iso_duration)
+    parts = []
+    if h:
+        parts.append(f"{h.group(1)}h")
+    if m:
+        parts.append(f"{m.group(1)}m")
+    return " ".join(parts) if parts else "N/A"
+    
 def list_offers(offer_request_id: str, limit: int = 30) -> list:
     url = "https://api.duffel.com/air/offers"
     params = {"offer_request_id": offer_request_id, "limit": limit}
@@ -130,15 +144,32 @@ def _fmt_time(iso_str: str) -> str:
 
 def _carrier_name(segment: dict) -> str:
     mc = segment.get("marketing_carrier") or {}
-    return mc.get("name") or mc.get("iata_code") or "Unknown airline"
+    oc = segment.get("operating_carrier") or {}
+
+    m_name = mc.get("name") or mc.get("iata_code") or "Unknown"
+    o_name = oc.get("name") or oc.get("iata_code") or ""
+
+    if o_name and o_name != m_name:
+        return f"{m_name} (operated by {o_name})"
+    return m_name
 
 def _flight_designator(segment: dict) -> str:
     mc = segment.get("marketing_carrier") or {}
-    code = mc.get("iata_code") or ""
-    num = segment.get("marketing_flight_number") or ""
+    code = mc.get("iata_code") or mc.get("iata_code")
+    num = segment.get("marketing_flight_number")
+
+    # Sometimes APIs provide "flight_number" or similar; try a couple common fallbacks
+    if not num:
+        num = segment.get("flight_number") or segment.get("number")
+
     if code and num:
         return f"{code}{num}"
-    return str(num) if num else "Flight"
+    if num:
+        return str(num)
+    # last resort: show route to at least be informative
+    o = (segment.get("origin") or {}).get("iata_code", "?")
+    d = (segment.get("destination") or {}).get("iata_code", "?")
+    return f"{o}-{d}"
 
 def _extract_offer_summary(offer: dict) -> dict:
     """
@@ -154,7 +185,7 @@ def _extract_offer_summary(offer: dict) -> dict:
             "depart": "?",
             "arrive": "?",
             "stops": 0,
-            "duration": slice0.get("duration") or "N/A",
+            "duration = _human_duration(slice0.get("duration") or ""),
             "airlines": [],
             "flights": [],
         }
