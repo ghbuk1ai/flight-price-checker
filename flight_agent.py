@@ -1,8 +1,8 @@
 import os
 import json
+import re
 import requests
 from datetime import date, timedelta
-import re
 
 # =========================
 # REQUIRED / OPTIONAL SECRETS
@@ -68,19 +68,6 @@ def create_offer_request(origin: str, destination: str, depart_date: date, cabin
     r.raise_for_status()
     return r.json()["data"]["id"]
 
-def _human_duration(iso_duration: str) -> str:
-    # Converts "PT9H2M" -> "9h 2m", "PT7H" -> "7h", "PT45M" -> "45m"
-    if not iso_duration or not iso_duration.startswith("PT"):
-        return iso_duration or "N/A"
-    h = re.search(r"(\d+)H", iso_duration)
-    m = re.search(r"(\d+)M", iso_duration)
-    parts = []
-    if h:
-        parts.append(f"{h.group(1)}h")
-    if m:
-        parts.append(f"{m.group(1)}m")
-    return " ".join(parts) if parts else "N/A"
-    
 def list_offers(offer_request_id: str, limit: int = 30) -> list:
     url = "https://api.duffel.com/air/offers"
     params = {"offer_request_id": offer_request_id, "limit": limit}
@@ -89,23 +76,15 @@ def list_offers(offer_request_id: str, limit: int = 30) -> list:
     return r.json()["data"]
 
 def offer_stops(offer: dict) -> int:
-    """
-    Stops = number of segments - 1, for the first slice (one-way).
-    """
+    """Stops = number of segments - 1, for the first slice (one-way)."""
     slice0 = offer["slices"][0]
     segments = slice0.get("segments", [])
     return max(len(segments) - 1, 0)
 
 def cheapest_offer(offers: list) -> dict | None:
     """
-    Picks the cheapest offer in USD, with a preference for nonstop (or max stops).
-    Returns:
-      {
-        "amount": float,
-        "offer_id": str,
-        "offer": dict,
-        "stops": int
-      }
+    Picks the cheapest offer in USD, preferring nonstop (or max stops).
+    Returns: {"amount", "offer_id", "offer", "stops"}
     """
     usd_offers = [o for o in offers if o.get("total_currency") == CURRENCY]
     if not usd_offers:
@@ -140,9 +119,24 @@ def notify_slack(text: str) -> None:
     requests.post(SLACK_WEBHOOK_URL, json={"text": text}, timeout=15).raise_for_status()
 
 def _fmt_time(iso_str: str) -> str:
+    # "2026-02-10T18:05:00" -> "2026-02-10 18:05"
     return iso_str.replace("T", " ")[:16]
 
+def _human_duration(iso_duration: str) -> str:
+    # "PT9H2M" -> "9h 2m", "PT7H" -> "7h", "PT45M" -> "45m"
+    if not iso_duration or not iso_duration.startswith("PT"):
+        return iso_duration or "N/A"
+    h = re.search(r"(\d+)H", iso_duration)
+    m = re.search(r"(\d+)M", iso_duration)
+    parts = []
+    if h:
+        parts.append(f"{h.group(1)}h")
+    if m:
+        parts.append(f"{m.group(1)}m")
+    return " ".join(parts) if parts else "N/A"
+
 def _carrier_name(segment: dict) -> str:
+    # Show marketing + operating if different (codeshares become understandable)
     mc = segment.get("marketing_carrier") or {}
     oc = segment.get("operating_carrier") or {}
 
@@ -154,11 +148,11 @@ def _carrier_name(segment: dict) -> str:
     return m_name
 
 def _flight_designator(segment: dict) -> str:
+    # Try multiple fields; if missing, show a useful fallback
     mc = segment.get("marketing_carrier") or {}
-    code = mc.get("iata_code") or mc.get("iata_code")
+    code = mc.get("iata_code") or ""
     num = segment.get("marketing_flight_number")
 
-    # Sometimes APIs provide "flight_number" or similar; try a couple common fallbacks
     if not num:
         num = segment.get("flight_number") or segment.get("number")
 
@@ -166,18 +160,19 @@ def _flight_designator(segment: dict) -> str:
         return f"{code}{num}"
     if num:
         return str(num)
-    # last resort: show route to at least be informative
+
     o = (segment.get("origin") or {}).get("iata_code", "?")
     d = (segment.get("destination") or {}).get("iata_code", "?")
     return f"{o}-{d}"
 
 def _extract_offer_summary(offer: dict) -> dict:
     """
-    Summarize a Duffel offer into fields we can show in Slack.
-    Assumes a one-way offer with one slice.
+    Summarize a Duffel offer into fields we show in Slack.
     """
     slice0 = offer["slices"][0]
     segments = slice0.get("segments", [])
+    duration = _human_duration(slice0.get("duration") or "")
+
     if not segments:
         return {
             "origin": "?",
@@ -185,7 +180,7 @@ def _extract_offer_summary(offer: dict) -> dict:
             "depart": "?",
             "arrive": "?",
             "stops": 0,
-            "duration = _human_duration(slice0.get("duration") or ""),
+            "duration": duration,
             "airlines": [],
             "flights": [],
         }
@@ -220,7 +215,7 @@ def _extract_offer_summary(offer: dict) -> dict:
         "depart": depart,
         "arrive": arrive,
         "stops": stops,
-        "duration": slice0.get("duration") or "N/A",
+        "duration": duration,
         "airlines": airlines_unique,
         "flights": flights,
     }
@@ -242,7 +237,7 @@ def _format_leg_for_slack(title: str, price: float, summary: dict, cabin_label: 
         f"{summary['origin']} → {summary['destination']} | {summary['depart']} → {summary['arrive']}\n"
         f"{stops_txt} | Duration {summary['duration']}\n"
         f"Airline(s): {airlines_txt}\n"
-        f"Flights: {flights_txt}"
+        f"Flight(s): {flights_txt}"
     )
 
 # =========================
@@ -333,7 +328,7 @@ def main() -> None:
 
         msg = (
             f"✈️ *Deal found under ${THRESHOLD:.0f}* — *${best['total_usd']:.2f} total*\n"
-            f"Dates: {best['out_date']} → {best['ret_date']}\n\n"
+            f"*Dates:* {best['out_date']} → {best['ret_date']}\n\n"
             f"{out_text}\n\n"
             f"{ret_text}\n\n"
             f"Offer IDs: out `{best['out_offer_id']}` / back `{best['ret_offer_id']}`"
