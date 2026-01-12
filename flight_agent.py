@@ -50,6 +50,10 @@ def create_offer_request(origin: str, destination: str, depart_date: date, cabin
         }
     }
     r = requests.post(url, headers=HEADERS, json=payload, timeout=30)
+  
+if not r.ok:
+    print("Duffel error status:", r.status_code)
+    print("Duffel error body:", r.text)
     r.raise_for_status()
     return r.json()["data"]["id"]
 
